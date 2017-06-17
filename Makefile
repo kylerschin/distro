@@ -1,8 +1,11 @@
-DISTRO_NAME=System76
+UBUNTU_ISO=http://cdimage.ubuntu.com/ubuntu-gnome/releases/17.04/release/ubuntu-gnome-17.04-desktop-amd64.iso
 
-DISTRO_CODE=system76
+DISTRO_NAME=Pop_OS
+
+DISTRO_CODE=pop_os
 
 DISTRO_REPOS=\
+	ppa:system76-dev/pre-stable \
 	ppa:system76-dev/stable
 
 DISTRO_PKGS=\
@@ -14,7 +17,7 @@ SED=\
 	s|DISTRO_REPOS|$(DISTRO_REPOS)|g; \
 	s|DISTRO_PKGS|$(DISTRO_PKGS)|g
 
-.PHONY: all clean iso run uefi
+.PHONY: all clean iso run uefi zsync
 
 iso: build/$(DISTRO_CODE).iso
 
@@ -44,7 +47,11 @@ uefi: build/$(DISTRO_CODE).iso build/qemu.img
 
 build/ubuntu.iso:
 	mkdir -p build
-	wget -O "$@" "http://cdimage.ubuntu.com/ubuntu-gnome/releases/17.04/release/ubuntu-gnome-17.04-desktop-amd64.iso"
+	wget -O "$@" "$(UBUNTU_ISO)"
+
+zsync: build/ubuntu.iso
+	zsync "$(UBUNTU_ISO).zsync" -o "$<"
+
 
 build/iso_extract.tag: build/ubuntu.iso
 	# Remove old ISO
@@ -102,7 +109,7 @@ build/chroot_modify.tag: build/chroot_extract.tag
 	sudo cp "scripts/chroot.sh" "build/chroot/chroot.sh"
 
 	# Run chroot script
-	sudo chroot "build/chroot" /bin/bash -e -c "REPOS=\"$(DISTRO_REPOS)\" /chroot.sh $(DISTRO_PKGS)"
+	sudo chroot "build/chroot" /bin/bash -e -c "DISTRO_NAME=\"$(DISTRO_NAME)\" DISTRO_CODE=\"$(DISTRO_CODE)\" DISTRO_REPOS=\"$(DISTRO_REPOS)\" /chroot.sh $(DISTRO_PKGS)"
 
 	# Remove chroot script
 	sudo rm "build/chroot/chroot.sh"
@@ -115,6 +122,9 @@ build/chroot_modify.tag: build/chroot_extract.tag
 build/iso_chroot.tag: build/chroot_modify.tag
 	# Rebuild filesystem image
 	sudo mksquashfs "build/chroot" "build/iso/casper/filesystem.squashfs" -noappend
+
+	# Copy vmlinuz
+	sudo cp "build/chroot/vmlinuz" "build/iso/casper/vmlinuz.efi"
 
 	# Rebuild initrd
 	sudo gzip -dc "build/chroot/initrd.img" | lzma -7 > "build/iso/casper/initrd.lz"
